@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Morse Code Translator</title>
+<style>
+:root{--bg:#1e1e1e;--panel:#2b2b2b;--text:#e0e0e0;--muted:#9a9a9a;--grid:#444;--a1:#54a0ff;--a2:#ff9f43;--a3:#1dd1a1;--btn:#3a3a3a;--btnh:#505050}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Helvetica,Arial,sans-serif}
+main{max-width:900px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:22px;margin:4px 0 2px;font-weight:600;text-align:center}
+.sub{text-align:center;color:var(--muted);margin:0 0 18px;font-size:13px}
+.card{background:var(--panel);border:1px solid var(--grid);border-radius:8px;padding:14px;margin-bottom:14px}
+.lbl{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+.muted{color:var(--muted)}
+textarea{width:100%;min-height:90px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--grid);border-radius:6px;padding:10px;font:inherit}
+textarea:focus,button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--a1);outline-offset:2px}
+.controls{display:flex;flex-wrap:wrap;gap:18px;margin:14px 0 4px}
+.ctl{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--muted);min-width:200px;flex:1}
+.ctl b{color:var(--text);font-weight:600}
+input[type=range]{width:100%;accent-color:var(--a3)}
+.btns{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}
+button{background:var(--btn);color:var(--text);border:1px solid var(--grid);border-radius:6px;padding:9px 20px;font:inherit;cursor:pointer}
+button:hover:not(:disabled){background:var(--btnh)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:#1b6e57;border-color:#1dd1a1;min-width:110px}
+button.primary:hover:not(:disabled){background:#228a6d}
+.head{display:flex;align-items:center;gap:14px}
+.lamp{width:26px;height:26px;border-radius:50%;background:#3a3a3a;border:1px solid var(--grid);flex:none;transition:background .03s}
+.lamp.on{background:var(--a2);border-color:var(--a2);box-shadow:0 0 18px 6px rgba(255,159,67,.6)}
+.bar{height:4px;background:var(--bg);border-radius:2px;margin:12px 0 4px;overflow:hidden}
+#barfill{height:100%;width:0;background:var(--a1)}
+.out{display:flex;flex-wrap:wrap;gap:12px 24px;margin-top:12px;min-height:60px}
+.out:empty::before{content:"Type some text above.";color:var(--muted)}
+.word{display:flex;flex-wrap:wrap;gap:6px}
+.letter{display:flex;flex-direction:column;align-items:center;min-width:46px;padding:6px 8px;background:var(--bg);border:1px solid var(--grid);border-radius:6px}
+.letter b{font-size:18px;font-weight:600}
+.letter i{font:normal 15px/1.3 ui-monospace,Consolas,monospace;letter-spacing:3px;color:var(--muted);white-space:nowrap}
+.letter.cur{border-color:var(--a1)}
+.letter.cur b{color:var(--a1)}
+i u{text-decoration:none}
+i u.on{color:var(--a2);text-shadow:0 0 6px var(--a2)}
+.warn{color:#ff9f9f;font-size:12px;margin-top:10px;min-height:1em}
+.raw{font:14px/1.7 ui-monospace,Consolas,monospace;word-break:break-word;letter-spacing:1px}
+.raw:empty::before{content:"(nothing yet)";color:var(--muted)}
+.ref{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+<h1>Morse Code Translator</h1>
+<p class="sub">Type text, see the Morse code, and hear it played back</p>
+
+<div class="card">
+  <label class="lbl" for="text">Text</label>
+  <textarea id="text" maxlength="500" spellcheck="false" placeholder="Type something…">HELLO WORLD</textarea>
+  <div class="controls">
+    <label class="ctl">Speed: <b><span id="wpmv">15</span> WPM</b>
+      <input type="range" id="wpm" min="5" max="40" step="1" value="15"></label>
+    <label class="ctl">Tone: <b><span id="freqv">600</span> Hz</b>
+      <input type="range" id="freq" min="300" max="1000" step="10" value="600"></label>
+    <label class="ctl">Volume: <b><span id="volv">50</span>%</b>
+      <input type="range" id="vol" min="0" max="100" step="1" value="50"></label>
+  </div>
+  <div class="btns">
+    <button id="play" type="button" class="primary">▶ Play</button>
+    <button id="copy" type="button">Copy Morse</button>
+    <button id="dl" type="button" hidden>Download WAV</button>
+    <span id="status" class="muted" role="status" aria-live="polite"></span>
+  </div>
+</div>
+
+<div class="card">
+  <div class="head"><div id="lamp" class="lamp" aria-hidden="true"></div><div id="info" class="muted"></div></div>
+  <div class="bar"><div id="barfill"></div></div>
+  <div id="out" class="out"></div>
+  <div id="warn" class="warn" role="status"></div>
+</div>
+
+<div class="card">
+  <span class="lbl">Morse code (letters separated by spaces, words by “/”)</span>
+  <div id="raw" class="raw"></div>
+</div>
+
+<div class="card ref">
+  Timing follows the PARIS standard: a dot lasts 1 unit and a dash 3. The gap is 1 unit between
+  symbols, 3 between letters and 7 between words. One unit is 1.2 / WPM seconds. Changing the speed
+  stops playback; tone and volume apply live. Ctrl+Enter in the text box plays or stops.
+</div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+
+/* ---------------- Morse table (ITU) ---------------- */
+const MORSE = {
+  A:'.-', B:'-...', C:'-.-.', D:'-..', E:'.', F:'..-.', G:'--.', H:'....', I:'..', J:'.---',
+  K:'-.-', L:'.-..', M:'--', N:'-.', O:'---', P:'.--.', Q:'--.-', R:'.-.', S:'...', T:'-',
+  U:'..-', V:'...-', W:'.--', X:'-..-', Y:'-.--', Z:'--..',
+  0:'-----', 1:'.----', 2:'..---', 3:'...--', 4:'....-', 5:'.....', 6:'-....', 7:'--...', 8:'---..', 9:'----.',
+  '.':'.-.-.-', ',':'--..--', '?':'..--..', "'":'.----.', '!':'-.-.--', '/':'-..-.', '(':'-.--.', ')':'-.--.-',
+  '&':'.-...', ':':'---...', ';':'-.-.-.', '=':'-...-', '+':'.-.-.', '-':'-....-', '_':'..--.-', '"':'.-..-.',
+  '$':'...-..-', '@':'.--.-.'
+};
+const REV = Object.fromEntries(Object.entries(MORSE).map(([k, v]) => [v, k]));
+
+/* ---------------- Pure logic (no DOM, so it can be tested) ---------------- */
+function normalize(text) {
+  // Strip accents (é -> e) and upper-case (ß -> SS)
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+}
+
+function encode(text) {
+  const words = [], skipped = new Set();
+  for (const w of normalize(text).split(/\s+/)) {
+    if (!w) continue;
+    const letters = [];
+    for (const ch of w) {
+      if (Object.prototype.hasOwnProperty.call(MORSE, ch)) letters.push({ ch, code: MORSE[ch] });
+      else skipped.add(ch);
+    }
+    if (letters.length) words.push(letters);
+  }
+  return { words, skipped: [...skipped] };
+}
+
+function toMorseString(words) {
+  return words.map(w => w.map(l => l.code).join(' ')).join(' / ');
+}
+
+// Tone events in seconds from time zero. li = letter index, si = symbol index within the letter.
+function buildTimeline(words, wpm) {
+  const unit = 1.2 / wpm, events = [];
+  let t = 0, li = 0;
+  words.forEach((word, wi) => {
+    word.forEach((L, ci) => {
+      [...L.code].forEach((s, si) => {
+        const dur = (s === '.' ? 1 : 3) * unit;
+        events.push({ t, dur, li, si });
+        t += dur;
+        if (si < L.code.length - 1) t += unit;
+      });
+      li++;
+      if (ci < word.length - 1) t += 3 * unit;
+    });
+    if (wi < words.length - 1) t += 7 * unit;
+  });
+  return { events, total: t, unit };
+}
+
+/* ---------------- Audio ---------------- */
+// Works on a real AudioContext or an OfflineAudioContext (used by the tests).
+// The sine passes through an envelope gain (0 to 1) with 5 ms ramps centred on each edge, which
+// removes clicks without changing the audible length of any dot or dash, then a master volume.
+function scheduleOn(ctx, tl, freq, amp, base) {
+  const osc = ctx.createOscillator(), env = ctx.createGain(), master = ctx.createGain();
+  osc.type = 'sine';
+  osc.frequency.value = freq;
+  env.gain.value = 0;
+  master.gain.value = amp;
+  osc.connect(env); env.connect(master); master.connect(ctx.destination);
+  const r = Math.min(0.005, tl.unit / 4), g = env.gain;
+  g.setValueAtTime(0, 0);
+  for (const e of tl.events) {
+    const a = base + e.t, b = a + e.dur;
+    g.setValueAtTime(0, a - r / 2);
+    g.linearRampToValueAtTime(1, a + r / 2);
+    g.setValueAtTime(1, b - r / 2);
+    g.linearRampToValueAtTime(0, b + r / 2);
+  }
+  osc.start(base - 0.02);
+  osc.stop(base + tl.total + 0.05);
+  return { osc, env, master };
+}
+
+/* ---------------- UI ---------------- */
+let enc = { words: [], skipped: [] }, letterEls = [], player = null;
+const getWpm = () => +$('wpm').value;
+const getAmp = () => +$('vol').value / 100 * 0.5;
+
+function setStatus(s) { $('status').textContent = s; }
+
+function render() {
+  if (player) stop();
+  enc = encode($('text').value);
+  const out = $('out');
+  out.textContent = '';
+  letterEls = [];
+  enc.words.forEach(word => {
+    const w = document.createElement('div');
+    w.className = 'word';
+    word.forEach(L => {
+      const el = document.createElement('div');
+      el.className = 'letter';
+      el.dataset.ch = L.ch;
+      const b = document.createElement('b'); b.textContent = L.ch;
+      const i = document.createElement('i');
+      const syms = [...L.code].map(s => {
+        const u = document.createElement('u');
+        u.textContent = s === '.' ? '•' : '—';
+        i.appendChild(u);
+        return u;
+      });
+      el.append(b, i);
+      w.appendChild(el);
+      letterEls.push({ el, syms });
+    });
+    out.appendChild(w);
+  });
+  $('raw').textContent = toMorseString(enc.words);
+  $('warn').textContent = enc.skipped.length
+    ? 'Skipped (no Morse equivalent): ' + enc.skipped.join(' ') : '';
+  updateInfo();
+}
+
+function updateInfo() {
+  const n = letterEls.length;
+  $('play').disabled = n === 0 && !player;
+  if (!n) { $('info').textContent = 'Nothing to translate yet.'; return; }
+  const tl = buildTimeline(enc.words, getWpm());
+  const nw = enc.words.length;
+  $('info').textContent = `${n} character${n === 1 ? '' : 's'} · ${nw} word${nw === 1 ? '' : 's'} · ${tl.total.toFixed(1)} s at ${getWpm()} WPM`;
+}
+
+function clearHighlight() {
+  $('lamp').classList.remove('on');
+  $('barfill').style.width = '0';
+  letterEls.forEach(L => { L.el.classList.remove('cur'); L.syms.forEach(u => u.classList.remove('on')); });
+}
+
+function play() {
+  if (player) { stop(); return; }
+  const tl = buildTimeline(enc.words, getWpm());
+  if (!tl.events.length) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) { setStatus('This browser does not support Web Audio.'); return; }
+  const ctx = new AC();
+  ctx.resume();
+  const base = ctx.currentTime + 0.12;
+  const nodes = scheduleOn(ctx, tl, +$('freq').value, getAmp(), base);
+  player = { ctx, tl, base, k: -1, lastLi: -1, lastSi: -1, raf: 0, ...nodes };
+  $('play').textContent = '■ Stop';
+  setStatus('Playing…');
+  tickUI();
+}
+
+function tickUI() {
+  if (!player) return;
+  const { ctx, base, tl } = player, ev = tl.events;
+  const tt = ctx.currentTime - base - (ctx.outputLatency || ctx.baseLatency || 0);
+  while (player.k + 1 < ev.length && tt >= ev[player.k + 1].t) player.k++;
+  if (player.k >= 0) {
+    const e = ev[player.k];
+    $('lamp').classList.toggle('on', tt < e.t + e.dur);
+    if (e.li !== player.lastLi || e.si !== player.lastSi) {
+      if (player.lastLi >= 0) {
+        const p = letterEls[player.lastLi];
+        if (e.li !== player.lastLi) p.el.classList.remove('cur');
+        p.syms[player.lastSi].classList.remove('on');
+      }
+      const c = letterEls[e.li];
+      c.el.classList.add('cur');
+      c.syms[e.si].classList.add('on');
+      player.lastLi = e.li; player.lastSi = e.si;
+    }
+    // The symbol stays lit only while its tone sounds
+    if (tt >= e.t + e.dur) letterEls[e.li].syms[e.si].classList.remove('on');
+  }
+  $('barfill').style.width = Math.max(0, Math.min(100, tt / tl.total * 100)) + '%';
+  if (tt > tl.total + 0.15) { stop(); setStatus('Done'); return; }
+  player.raf = requestAnimationFrame(tickUI);
+}
+
+function stop() {
+  if (!player) return;
+  const p = player;
+  player = null;
+  cancelAnimationFrame(p.raf);
+  try {
+    const g = p.env.gain, now = p.ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setValueAtTime(g.value, now);
+    g.linearRampToValueAtTime(0, now + 0.01);   // short fade, so stopping does not click
+  } catch (e) {}
+  setTimeout(() => { try { p.osc.stop(); } catch (e) {} p.ctx.close().catch(() => {}); }, 60);
+  $('play').textContent = '▶ Play';
+  clearHighlight();
+  setStatus('');
+  updateInfo();
+}
+
+/* ---------------- Wiring ---------------- */
+$('text').addEventListener('input', () => { setStatus(''); render(); });
+$('text').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); play(); } });
+$('play').addEventListener('click', play);
+$('wpm').addEventListener('input', () => {
+  $('wpmv').textContent = $('wpm').value;
+  if (player) { stop(); setStatus('Speed changed, playback stopped.'); }
+  updateInfo();
+});
+$('freq').addEventListener('input', () => {
+  $('freqv').textContent = $('freq').value;
+  if (player) player.osc.frequency.value = +$('freq').value;
+});
+$('vol').addEventListener('input', () => {
+  $('volv').textContent = $('vol').value;
+  if (player) player.master.gain.value = getAmp();
+});
+$('copy').addEventListener('click', async () => {
+  const s = $('raw').textContent;
+  if (!s) return;
+  try { await navigator.clipboard.writeText(s); }
+  catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = s; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  }
+  setStatus('Copied to clipboard');
+});
+addEventListener('pagehide', stop);
+render();
+/* ---------------- Backend features (only when served by server.py) ---------------- */
+if (location.protocol.startsWith('http')) {
+  $('dl').hidden = false;
+  $('dl').addEventListener('click', () => {
+    const q = new URLSearchParams({ text: $('text').value, wpm: $('wpm').value, freq: $('freq').value, vol: $('vol').value });
+    const a = document.createElement('a');
+    a.href = '/api/audio.wav?' + q; a.download = 'morse.wav';
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  setInterval(() => { fetch('/api/ping', { method: 'POST' }).catch(() => {}); }, 20000);
+  window.addEventListener('beforeunload', () => navigator.sendBeacon('/api/bye'));
+}
+</script>
+</body>
+</html>
